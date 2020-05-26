@@ -42,6 +42,17 @@ class CardUserMixin(object):
     def discardpile(self):
         return self.db.card_discard
 
+    @property
+    def defense(self):
+        basedefense = self.db.stats['Strength']['Cur']
+        defense = int(basedefense)
+        for card in self.db.card_played:
+            carddata = helper.get_card_data(card)
+            if carddata.get("DefenseMult"):
+                defense = defense * carddata['DefenseMult']
+        defense = int(defense/10)
+        return defense
+
     def fill_deck(self):
         """ Remove this """
         for i in range(20):
@@ -67,12 +78,18 @@ class CardUserMixin(object):
             # Insert card effects here
             self.db.card_discard.append(from_zone.pop(index))
         else:
+            for index in range(0, len(self.db.card_played)):
+                played_carddata = helper.get_card_data(self.db.card_played[index])
+                if played_carddata['Type'] == carddata['Type']:
+                    self.msg(f"Removing {played_carddata['Name']} from play.")
+                    self.leaveplay(index)
+            self.msg(f'Playing {carddata["Name"]}')
             self.db.card_played.append(from_zone.pop(index))
-            if carddata.get('Create', None):
-                for card in carddata['Create']:
-                    self.db.card_deck.append(card)
-                self.shuffle(withdiscard=False)
-                self.calculate_stats()
+        if carddata.get('Create', None):
+            for card in carddata['Create']:
+                self.db.card_deck.append(card)
+            self.shuffle(withdiscard=False)
+            self.calculate_stats()
 
     def leaveplay(self, index):
         carddata = helper.get_card_data(self.db.card_played[index])
@@ -94,7 +111,23 @@ class CardUserMixin(object):
                     self.db.stats[key]['Max'] += cardmod
                     self.db.stats[key]['Cur'] += cardmod
 
+    def modify_stat(self, stat, amount, buff=False):
+        if stat in self.db.stats.keys():
+            mystat = self.db.stats[stat]
+            mystat['Cur'] += amount
+            if not buff:
+                mystat['Cur'] = min(mystat['Max'], mystat['Cur'])
+            self.check_stats()
 
+    def check_stats(self):
+        if self.db.stats['Health']['Cur'] <= 0:
+            if chandler := self.ndb.combat_handler:
+                chandler.msg_all(f'COMBAT: {self.key} is knocked out.')
+                chandler.remove_character(self)
+            self.die()
+
+    def die(self):
+        self.location.msg_contents(f'GAME: {self.key} dies.  If you\'re seeing this, this typeclass has not been set up properly.')
 
     def all_cards(self):
         allcards = list(self.db.card_deck) + list(self.db.card_hand) + list(self.db.card_discard) + list(self.db.card_played)
@@ -165,6 +198,9 @@ class CardCharacter(CardUserMixin, DefaultCharacter):
         super(CardCharacter, self).at_object_creation()
         self.db.hand_size = 4
 
+    def die(self):
+        self.location.msg_contents(f'{self.key} is unconscious.')
+        # TODO: Add cmdset to remove basic commands like move.
 
 class CardObject(DefaultObject):
     """
@@ -177,7 +213,7 @@ class CardObject(DefaultObject):
         self.db.component = None
 
 
-class NPC(CardUserMixin, DefaultObject):
+class NPC(CardUserMixin, DefaultCharacter):
     """
 
     """
@@ -186,6 +222,7 @@ class NPC(CardUserMixin, DefaultObject):
         self.db.card_combatok = True
         self.db.hand_size = 3
         self.db.death_message = 'died.'
+        self.db.card_equipped = []
 
     def basetype_posthook_setup(self):
         super(NPC, self).basetype_posthook_setup()
@@ -247,7 +284,7 @@ class NPC(CardUserMixin, DefaultObject):
             if len(group['Foe']) == 1:
                 target = group['Foe']
                 chandler.add_action(card, self, target)
-            elif card_details['Target'] == 'Group':
+            elif card_details.get('Target') == 'Group':
                 target = group['Foe']
                 chandlder.add_action(card, self, target)
             else:
@@ -257,7 +294,7 @@ class NPC(CardUserMixin, DefaultObject):
             if len(group['Friend']) == 1:
                 target = group['Friend']
                 chandler.add_action(card, self, target)
-            elif card_details['Target'] == 'Group':
+            elif card_details.get('Target') == 'Group':
                 target = group['Friend']
                 chandler.add_action(card, self, target)
             else:

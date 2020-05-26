@@ -15,7 +15,14 @@ NPC = {
 GOBLIN = {
     'key': "Goblin",
     'prototype_parent': "NPC",
-    'card_deck': ['Base_Common_Kick', 'Base_Common_Block', 'Base_Common_Kick'],
-    'card_equipped': ['Base_Common_Short Sword'],
+    'card_deck': ['Base_Common_Kick', 'Base_NPC_Claw', 'Base_Common_Punch', 'Base_Common_Block', 'Base_Common_Kick', 'Base_NPC_Thick Hide'],
+    'card_equipped': ['Base_Common_Rusty Knife'],
     'death_message': ['keels over.', 'bites the dust.', 'buys the farm.']
+}
+
+FARMER = {
+    'key': "Farmer",
+    'prototype_parent': "NPC",
+    'card_deck': ['Base_Common_Punch', 'Base_Common_Punch', 'Base_Common_Punch', 'Base_Common_Kick'],
+    'card_equipped': ['Base_Common_Pitchfork']
 }

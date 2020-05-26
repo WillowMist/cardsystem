@@ -16,7 +16,13 @@ RARITIES = {
         'right_border': '*',
         'top_border': '*',
         'bottom_border': '*',
-    }
+    },
+    'NPC': {
+        'left_border': '||',
+        'right_border': '||',
+        'top_border': '-',
+        'bottom_border': '-',
+    },
 }
 
 ELEMENTS = {
@@ -49,19 +55,22 @@ CARDS = {
                     'Type': 'Attack',
                     'Damage': 5,
                     'Effect': 'Edged Weapon Attack',
+                    'Requires': 'Weapon',
                 },
                 'Jab': {
                     'Element': 'Neutral',
                     'Type': 'Attack',
                     'Damage': 4,
                     'Piercing': True,
-                    'Effect': 'Edged Weapon Attack'
+                    'Effect': 'Edged Weapon Attack',
+                    'Requires': 'Weapon',
                 },
                 'Crush': {
                     'Element': 'Neutral',
                     'Type': 'Attack',
                     'Damage': 5,
-                    'Effect': 'Bashing Weapon Attack'
+                    'Effect': 'Bashing Weapon Attack',
+                    'Requires': 'Weapon',
                 },
             }
         },
@@ -79,6 +88,7 @@ CARDS = {
                     'Element': 'Neutral',
                     'Type': 'Defend',
                     'Defense': 2,
+                    'UseStat': 'Reflexes',
                     'Health': 1,
                     'Effect': 'Basic Block',
                 },
@@ -86,7 +96,8 @@ CARDS = {
                     'Element': 'Neutral',
                     'Type': 'Weapon',
                     'AttackMultiplier': 1,
-                }
+                },
+
             },
             'Common': {
                 'Punch': {
@@ -108,7 +119,7 @@ CARDS = {
                   'Reflexes': 1,
                 },
                 'Block': {
-                    'Inherits': 'Basic_Shared_Basic Block',
+                    'Inherits': 'Base_Shared_Basic Block',
                     'Defense': 3,
                     'Effect': 'Basic Block',
                     'Health': 1,
@@ -119,7 +130,7 @@ CARDS = {
                     'AttackMultiplier': 1.2,
                     'Effect': 'Simple Edged Weapon',
                     'Detail': 'A small, rusty knife.',
-                    'Create': ['Temp_Common_Slash', 'Temp_Common_ab', 'Temp_Common_Jab'],
+                    'Create': ['Temp_Common_Slash', 'Temp_Common_Jab', 'Temp_Common_Jab'],
                     'Loot': {
                         'prototype_parent': 'card-object',
                         'key': 'rusty knife',
@@ -147,7 +158,7 @@ CARDS = {
                     'AttackMultiplier': 1.25,
                     'Effect': 'Simple Bashing Weapon',
                     'Detail': 'A basic club, fashioned from a log.',
-                    'Create': ['Temp_Common_Crush', 'Temp_Common_Crush', 'Temp_Common_Crush']
+                    'Create': ['Temp_Common_Crush', 'Temp_Common_Crush', 'Temp_Common_Crush'],
                     'Loot': {
                         'prototype_parent': 'card-object',
                         'key': 'simple club',
@@ -155,6 +166,20 @@ CARDS = {
                         'desc': 'A basic club, fashioned from a log.'
                     }
                 },
+                'Pitchfork': {
+                    'Inherits': 'Base_Shared_Simple Weapon',
+                    'Reflexes': 1,
+                    'AttackMultiplier': 1.2,
+                    'Effect': 'Simple Piercing Weapon',
+                    'Detail': 'A farmer\'s pitchfork',
+                    'Create': ['Temp_Common_Jab', 'Temp_Common_Jab', 'Temp_Common_Jab'],
+                    'Loot': {
+                        'prototype_parent': 'card-object',
+                        'key': 'pitchfork',
+                        'card': 'Base_Common_Pitchfork',
+                        'desc': 'A farmer\'s pitchfork',
+                    }
+                }
             },
             'Uncommon': {
                 'Ray of Light': {
@@ -230,6 +255,35 @@ CARDS = {
                     'Effect': 'Blasts opponent with water',
                     'Detail': 'Summon a blast of water to pelt your opponent, doing DAMAGE damage.'
                 },
+            },
+            'NPC': {
+                'Claw': {
+                    'Inherits': 'Base_Shared_Basic Attack',
+                    'Damage': 3,
+                    'Strength': 1,
+                },
+                'Bite': {
+                    'Inherits': 'Base_Shared_Basic Attack',
+                    'Damage': 3,
+                    'Strength': 1,
+                    'Reflexes': 1,
+                },
+                'Sting': {
+                    'Inherits': 'Base_Shared_Basic Attack',
+                    'Damage': 3,
+                    'Reflexes': 2,
+                },
+                'Thick Hide': {
+                    'Inherits': 'Base_Shared_Basic Block',
+                    'Defense': 3,
+                    'Health': 1,
+                    'Loot': {
+                        'prototype_parent': 'card-object',
+                        'key': 'leather scrap',
+                        'component': 'leather scrap_1',
+                        'desc': 'A scrap of leathery hide.'
+                    }
+                }
             }
         }
 }

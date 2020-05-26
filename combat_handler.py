@@ -4,7 +4,7 @@ from evennia.utils.evmenu import EvMenu
 from cardsystem import helper
 from cardsystem.typeclasses import CardCharacter, NPC
 from typeclasses.characters import Character
-import types
+from evennia.utils import logger
 
 class CombatHandler(DefaultScript):
     """
@@ -12,7 +12,7 @@ class CombatHandler(DefaultScript):
     """
 
     def at_script_creation(self):
-        "Called when script is first created"
+        """Called when script is first created"""
 
         self.key = "combat_handler_%i" % random.randint(1, 1000)
         self.desc = "handles combat"
@@ -44,6 +44,11 @@ class CombatHandler(DefaultScript):
         del self.db.action_count[dbref]
         del self.db.disconnected_turns[dbref]
         del character.ndb.combat_handler
+        try:
+            if character.nattributes.get('_menutree'):
+                character.ndb._menutree.close_menu()
+        except:
+            pass
 
     def at_start(self):
         """
@@ -55,9 +60,10 @@ class CombatHandler(DefaultScript):
             self._init_character(character)
 
     def at_stop(self):
-        "Called just before the script is stopped/destroyed."
+        """Called just before the script is stopped/destroyed."""
         for character in list(self.db.characters.values()):
             # note: the list() call above disconnects list from database
+            self.msg_all("Combat has ended")
             self._cleanup_character(character)
 
     def at_repeat(self):
@@ -84,29 +90,29 @@ class CombatHandler(DefaultScript):
     # Combat-handler methods
 
     def add_character(self, character):
-        "Add combatant to handler"
+        """Add combatant to handler"""
         dbref = character.id
         self.db.characters[dbref] = character
         self.db.action_count[dbref] = 0
         self.db.disconnected_turns[dbref] = 0
-        self.db.turn_actions[dbref] = [{'card': None, 'character': character, 'target': [None]}]
+        self.db.turn_actions [dbref] = [{'card': None, 'character': character, 'target': [None]}]
         # set up back-reference
         self._init_character(character)
         if character in CardCharacter.objects.all() or character in Character.objects.all():
             EvMenu(character, 'cardsystem.combat_handler', startnode='combat_menu', cmd_on_exit=None)
-        elif character in NPC.objects.all():
+        elif character in NPC.objects.all() and len(self.db.characters) > 1:
             character.combat_action()
 
     def remove_character(self, character):
-        "Remove combatant from handler"
+        """Remove combatant from handler"""
         if character.id in self.db.characters:
             self._cleanup_character(character)
-        if not self.db.characters:
+        if len(self.db.characters):
             # if no more characters in battle, kill this handler
             self.stop()
 
     def msg_all(self, message):
-        "Send message to all combatants"
+        """Send message to all combatants"""
         for character in self.db.characters.values():
             character.msg(message)
 
@@ -130,6 +136,11 @@ class CombatHandler(DefaultScript):
             # report if we already used too many actions
             return False
         self.db.action_count[dbref] += 1
+        # Check to see if any NPCs have not acted
+        for char in self.db.characters.values():
+            if char in NPC.objects.all() and self.db.action_count[char.id] < 1:
+                self.msg_all(f'{char.key} going.')
+                char.combat_action()
         return True
 
     def check_end_turn(self):
@@ -154,7 +165,7 @@ class CombatHandler(DefaultScript):
 
         if len(self.db.characters) < 2:
             # less than 2 characters in battle, kill this handler
-            self.msg_all("Combat has ended")
+
             self.stop()
         else:
             # reset counters before next turn
@@ -176,7 +187,8 @@ class CombatHandler(DefaultScript):
                         if self.db.disconnected_turns[character.id] > 3:
                             self.remove_character(character)
             for character in self.db.characters.values():
-                if character in NPC.objects.all():
+                if character in NPC.objects.all() and len(self.db.characters) > 1:
+                    self.msg_all(f'{character.key} going.')
                     character.combat_action()
 
     def resolve_combat(self):
@@ -184,21 +196,79 @@ class CombatHandler(DefaultScript):
         Process combat results.
         """
         combat_results = ''
+        effects = {}
+        attacks = {}
         for key, character in self.db.characters.items():
             charname = character.key
+            self.msg_all(f"{charname} - {self.db.turn_actions[key]}")
             for action in self.db.turn_actions[key]:
                 if action['card']:
                     carddata = helper.get_card_data(action['card'])
+                    # Calculate Damage and Block/Dodge
                     target = action['target']
-                    targets = helper.pretty_list_objects(target)
-                    combat_results += f'{charname} played {carddata["Name"]} targeting {targets}.\n'
-                    pool, cardindex = helper.find_card(character, action['card'], pools=['card_hand'])
-                    if cardindex:
-                        character.play(cardindex)
+                    for t in list(target):
+                        if not t:
+                            target.remove(t)
+                    if target:
+                        targets = helper.pretty_list_objects(target)
+                        pool, cardindex = helper.find_card(character, action['card'], pools=['card_hand'])
+                        if pool:
+                            character.play(cardindex)
+                            if carddata['Type'] in ['Defend', 'Buff', 'Debuff', 'Weapon', 'Armor', 'Item']:
+                                if character not in effects.keys():
+                                    effects[character] = []
+                                combat_results += f'{charname} played {carddata["Name"]} targeting {targets}.\n'
+                                if carddata['Type'] == 'Defend':
+                                    stat = carddata.get('TargetStat', 'Health')
+                                    usestat = carddata.get('UseStat', 'Strength')
+                                    defendmult = character.db.stats[usestat]['Cur'] / 10
+                                    self.msg_all(f'Defend: {stat}, {usestat}, {defendmult}, {carddata["Defense"]}')
+                                    effect = {'Defend': stat, 'Amount': int(carddata['Defense'] * defendmult), 'Element': carddata['Element']}
+                                    effects[character].append(effect)
+                            elif carddata['Type'] in ['Attack']:
+                                if character in attacks.keys():
+                                    attacks[character].append(action)
+                                else:
+                                    attacks[character] = [action]
                 else:
                     combat_results += f'{charname} played nothing.\n'
-            self.db.last_round += 1
-            self.db.combat_results[self.db.last_round] = combat_results
+        self.msg_all(f'Before Attack: {effects}')
+        for character, actionlist in attacks.items():
+            for action in actionlist:
+                carddata = helper.get_card_data(action['card'])
+                cardname = helper.card_brief(carddata)
+                for tgt in action['target']:
+                    basedamage = carddata["Damage"]
+                    usestat = carddata.get('UseStat', 'Strength')
+                    statmult = character.db.stats[usestat]['Cur']/10
+                    damage = int(basedamage * statmult)
+                    if carddata.get('Requires', None):
+                        itemfound = False
+                        for itemcard in character.db.card_played:
+                            itemcarddata = helper.get_card_data(itemcard)
+                            if itemcarddata['Type'] == carddata.get('Requires'):
+                                itemfound = True
+                                itemmult = itemcarddata.get('AttackMultiplier', 1)
+                                continue
+                        if itemfound:
+                            damage = int(damage * itemmult)
+                        else:
+                            combat_results += (f'{character.key} played an unplayable card.')
+                            continue
+                    self.msg_all(f'Base: {basedamage}, Stat: {usestat}, Mult: {statmult}, Damage: {damage}')
+                    tgteffects = effects.get(tgt, [])
+                    for effect in tgteffects:
+                        if 'Defend' in effect.keys() and carddata.get('TargetStat', 'Health') == effect['Defend']:
+                            damage -= effect['Amount']
+                    # TODO: Calculate actual damage with buffs, debuffs, etc.
+                    damage -= tgt.defense
+                    damage = 0-max(0, damage)
+                    self.msg_all('Stuff 1')
+                    tgt.modify_stat('Health', damage)
+                    self.msg_all('Stuff 2')
+                    combat_results += (f'{character.key} attacks {tgt.key} with {cardname} for {abs(damage)} damage.\n')
+        self.db.last_round += 1
+        self.db.combat_results[self.db.last_round] = combat_results
 
     def get_groups(self, obj):
         phandler = obj.ndb.party_handler
@@ -219,18 +289,21 @@ class CmdAttack(Command):
     Usage:
       attack <target>
 
-    This will initiate combat with <target>. If <target is
+    This will initiate combat with <target>. If <target> is
     already in combat, you will join the combat.
     """
     key = "attack"
     help_category = "General"
+    arg_regex = r"\s|$"
 
     def func(self):
-        "Handle command"
+        """Handle command"""
+        caller = self.caller
         if not self.args:
             self.caller.msg("Usage: attack <target>")
             return
-        target = self.caller.search(self.args)
+        self.caller.msg(self.args.strip())
+        target = caller.search(self.args.strip())
         if not target:
             return
         # set up combat
@@ -247,22 +320,34 @@ class CmdAttack(Command):
             chandler.add_character(target)
 
 
-def combat_menu(caller):
+def combat_menu(caller, raw_string, **kwargs):
+
     chandler = caller.ndb.combat_handler
+    group = chandler.get_groups(caller)
     caller.draw(caller.db.hand_size - len(caller.db.card_hand))
     text = ""
-    if chandler.db.last_round:
-        text += f'Last Round Results:\n{chandler.db.combat_results[chandler.db.last_round]}\n'
-    text += str(helper.card_small_multiple(caller.db.card_hand, title="Your Hand"))
+    if 'hand' in kwargs.keys():
+        text += str(helper.card_small_multiple(caller.db.card_hand, title="Your Hand"))
+    elif 'details' in kwargs.keys():
+        carddata = helper.get_card_data(kwargs['details'])
+        text += str(helper.card_detail(carddata))
+    elif 'stats' in kwargs.keys():
+        combat_stats = helper.combat_stats_multiple(list(group['Friend']) + list(group['Foe']))
+        text += str(combat_stats)
+    else:
+        if chandler.db.last_round:
+            text += f'Last Round Results:\n{chandler.db.combat_results[chandler.db.last_round]}\n'
     options = []
     for card in caller.db.card_hand:
         cardname = helper.card_brief(helper.get_card_data(card))
         options.append({'desc': f'Play {cardname}', 'goto': ('checktargets', {'card': card})})
+    for index in range(0, len(caller.db.card_hand)):
+        carddata = helper.get_card_data(caller.db.card_hand[index])
+        options.append({'key': f'x{index+1}', 'desc': f'Examine {helper.card_brief(carddata)}', 'goto': ('combat_menu', {'details': carddata['CardString']})})
+    options.append({'key': 'hand', 'desc': 'View your hand', 'goto': ('combat_menu', {'hand': True})})
+    options.append({'key': 'stats', 'desc': 'View combat stats', 'goto': ('combat_menu', {'stats': True})})
     options.append({'key': 'flee', 'desc': 'Run from combat', 'goto': 'fleecombat'})
     return text, options
-
-
-
 
 def checktargets(caller, raw_string, **kwargs):
     text = ''
@@ -274,6 +359,7 @@ def checktargets(caller, raw_string, **kwargs):
         card_details = helper.get_card_data(card)
         cardname = helper.card_brief(card_details)
         group = chandler.get_groups(caller)
+        chandler.msg_all(group)
         target = None
         if card_details['Type'] == 'Attack' or card_details['Type'] == 'Debuff':
             if len(group['Foe']) == 1:

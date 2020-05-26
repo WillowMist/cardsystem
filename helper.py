@@ -72,7 +72,7 @@ def card_detail(card):
     color = cardsystem.ELEMENTS[card['Element']]['Color']
     cardstats = [evtable.EvColumn(align='r'),evtable.EvColumn(align='l')]
     for key in keys:
-        if key not in ['Effect', 'Detail', 'Name', 'Inherits', 'AI', 'CardString']:
+        if key not in ['Effect', 'Detail', 'Name', 'Inherits', 'AI', 'CardString', 'Loot', 'Create', 'AttackMultiplier', 'DefenseMultiplier']:
             cardstats[0].add_rows(key)
             cardstats[1].add_rows(card[key])
 
@@ -139,6 +139,18 @@ def combat_stats(combatant, looker=None):
         table.append(card_brief(cardinfo))
     display = evtable.EvTable(f"|c{combatant.get_display_name(looker)}|n", border='table', table=[table], width=25, align='c')
     return display
+
+def combat_stats_multiple(characters, width=79, title="Combat Stats"):
+    colcount = int(width/27)
+    rows = []
+    for i in range(0,colcount):
+        rows.append([])
+    for i in range(0, len(characters)):
+        row = int(math.fmod(i, colcount))
+        stats = combat_stats(characters[i])
+        rows[row].append(stats)
+    statmultiple = evtable.EvTable("", f'{title}', "", border=None, table=rows, align="c", valign="t")
+    return statmultiple
 
 def find_card(holder, cardstring, pools=[]):
     for pool in pools:
