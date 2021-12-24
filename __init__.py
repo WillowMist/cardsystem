@@ -97,6 +97,12 @@ CARDS = {
                     'Type': 'Weapon',
                     'AttackMultiplier': 1,
                 },
+                'Spell Book': {
+                    'Element': 'Neutral',
+                    'Type': 'Spell Book',
+                    'Attack Multiplier': 1.1,
+                    'Intelligence': 1,
+                }
 
             },
             'Common': {
@@ -179,6 +185,15 @@ CARDS = {
                         'card': 'Base_Common_Pitchfork',
                         'desc': 'A farmer\'s pitchfork',
                     }
+                },
+                'Orc Strength': {
+                    'Type': 'Buff',
+                    'Element': 'Neutral',
+                    'TargetStat': 'Strength',
+                    'UseStat': 'Intelligence',
+                    'Amount': 3,
+                    'Duration': 3,
+                    'Effect': 'Add Strength for 3 Turns'
                 }
             },
             'Uncommon': {

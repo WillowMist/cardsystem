@@ -1,5 +1,6 @@
 import random
-from evennia import DefaultScript, create_script, Command
+from evennia import DefaultScript, create_script
+from evennia.commands.default.muxcommand import MuxCommand
 from evennia.utils.evmenu import EvMenu
 from cardsystem import helper
 from cardsystem.typeclasses import CardCharacter, NPC
@@ -45,6 +46,7 @@ class CombatHandler(DefaultScript):
         del self.db.disconnected_turns[dbref]
         del character.ndb.combat_handler
         try:
+            character.cleareffects()
             if character.nattributes.get('_menutree'):
                 character.ndb._menutree.close_menu()
         except:
@@ -173,6 +175,7 @@ class CombatHandler(DefaultScript):
                 self.db.characters[character.id] = character
                 self.db.action_count[character.id] = 0
                 self.db.turn_actions[character.id] = [{'card': None, 'character': character, 'target': [None]}]
+                character.countdowneffects()
                 if character in CardCharacter.objects.all() or character in Character.objects.all():
                     try:
                         if character.nattributes.get('_menutree'):
@@ -221,10 +224,20 @@ class CombatHandler(DefaultScript):
                                 if carddata['Type'] == 'Defend':
                                     stat = carddata.get('TargetStat', 'Health')
                                     usestat = carddata.get('UseStat', 'Strength')
-                                    defendmult = character.db.stats[usestat]['Cur'] / 10
+                                    defendmult = character.get_stat(usestat)[0] / 10
                                     self.msg_all(f'Defend: {stat}, {usestat}, {defendmult}, {carddata["Defense"]}')
                                     effect = {'Defend': stat, 'Amount': int(carddata['Defense'] * defendmult), 'Element': carddata['Element']}
                                     effects[character].append(effect)
+                                if carddata['Type'] in ['Buff', 'Debuff']:
+                                    stat = carddata.get('TargetStat', 'Strength')
+                                    usestat = carddata.get('UseStat', 'Intelligence')
+                                    buffmult = character.get_stat(usestat)[0] / 10
+                                    amount = int(carddata.get('Amount', 1) * buffmult)
+                                    duration = carddata.get('Duration', -1)
+                                    if carddata['Type'] == 'Debuff':
+                                        amount = 0 - amount
+                                    for tgt in target:
+                                        tgt.addeffect(stat, amount, duration=duration, source=character)
                             elif carddata['Type'] in ['Attack']:
                                 if character in attacks.keys():
                                     attacks[character].append(action)
@@ -240,7 +253,7 @@ class CombatHandler(DefaultScript):
                 for tgt in action['target']:
                     basedamage = carddata["Damage"]
                     usestat = carddata.get('UseStat', 'Strength')
-                    statmult = character.db.stats[usestat]['Cur']/10
+                    statmult = character.get_stat(usestat)[0] / 10
                     damage = int(basedamage * statmult)
                     if carddata.get('Requires', None):
                         itemfound = False
@@ -276,13 +289,13 @@ class CombatHandler(DefaultScript):
         for characterid in self.db.characters.keys():
             if characterid == obj.id:
                 group['Friend'].append(self.db.characters[characterid])
-            elif phandler and characterid in phandler.characters.keys():
+            elif phandler and characterid in phandler.db.characters.keys():
                 group['Friend'].append(self.db.characters[characterid])
             else:
                 group['Foe'].append(self.db.characters[characterid])
         return group
 
-class CmdAttack(Command):
+class CmdAttack(MuxCommand):
     """
     initiates combat
 
@@ -302,9 +315,11 @@ class CmdAttack(Command):
         if not self.args:
             self.caller.msg("Usage: attack <target>")
             return
-        self.caller.msg(self.args.strip())
-        target = caller.search(self.args.strip())
+        target = caller.search(self.args)
         if not target:
+            return
+        if target.ndb.party_handler and player.ndb.party_handler == target.ndb.party_handler:
+            self.caller.msg("You cannot attack someone in your party!")
             return
         # set up combat
         if target.ndb.combat_handler:
@@ -318,6 +333,13 @@ class CmdAttack(Command):
             target.msg("%s attacks you! You are in combat." % self.caller)
             chandler.add_character(self.caller)
             chandler.add_character(target)
+            for member in chandler.db.characters.values():
+                if member.ndb.party_handler:
+                    party_handler = self.caller.ndb.party_handler
+                    for character in party_handler.db.characters.values():
+                        if character != member and character.id not in chandler.db.characters.keys():
+                            chandler.add_character(character)
+                            chandler.msg_all("%s joins combat!" % character)
 
 
 def combat_menu(caller, raw_string, **kwargs):

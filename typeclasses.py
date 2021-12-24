@@ -15,9 +15,11 @@ class CardUserMixin(object):
         self.db.card_hand = []
         self.db.card_discard = []
         self.db.card_played = []
-        self.db.stats = {'Strength': {'Max': 10, 'Cur': 10},
-                         'Reflexes': {'Max': 10, 'Cur': 10},
-                         'Health': {'Max': 10, 'Cur': 10},
+        self.db.card_effects = {}
+        self.db.stats = {'Strength': {'Max': 10, 'Cur': 10, 'Mod': 0},
+                         'Reflexes': {'Max': 10, 'Cur': 10, 'Mod': 0},
+                         'Health': {'Max': 10, 'Cur': 10, 'Mod': 0},
+                         'Intelligence': {'Max': 10, 'Cur': 10, 'Mod': 0},
                          }
 
     def shuffle(self, withdiscard=True):
@@ -52,6 +54,9 @@ class CardUserMixin(object):
                 defense = defense * carddata['DefenseMult']
         defense = int(defense/10)
         return defense
+
+    def get_stat(self, stat):
+        return self.db.stats[stat]['Cur'] + self.db.stats[stat]['Mod'], self.db.stats[stat]['Max']
 
     def fill_deck(self):
         """ Remove this """
@@ -90,6 +95,7 @@ class CardUserMixin(object):
                 self.db.card_deck.append(card)
             self.shuffle(withdiscard=False)
             self.calculate_stats()
+            self.check_stats()
 
     def leaveplay(self, index):
         carddata = helper.get_card_data(self.db.card_played[index])
@@ -97,6 +103,8 @@ class CardUserMixin(object):
             for card in carddata['Create']:
                 self.remove_card(card)
         self.db.card_discard.append(self.db.card_played.pop(index))
+        self.calculate_stats()
+        self.check_stats()
 
     def calculate_stats(self):
         for key in self.db.stats.keys():
@@ -104,23 +112,27 @@ class CardUserMixin(object):
             statdif = stat['Max'] - stat['Cur']
             self.db.stats[key]['Max'] = 10
             self.db.stats[key]['Cur'] = 10 - statdif
+            self.db.stats[key]['Mod'] = 0
             for card in self.all_cards():
                 cardinfo = helper.get_card_data(card)
                 cardmod = cardinfo.get(key, 0)
                 if cardmod:
                     self.db.stats[key]['Max'] += cardmod
                     self.db.stats[key]['Cur'] += cardmod
+            for effect in self.db.card_effects.values():
+                if effect['Stat'] == key:
+                    self.db.stats[key]['Mod'] += effect['Amount']
 
-    def modify_stat(self, stat, amount, buff=False):
+    def modify_stat(self, stat, amount):
         if stat in self.db.stats.keys():
             mystat = self.db.stats[stat]
             mystat['Cur'] += amount
-            if not buff:
-                mystat['Cur'] = min(mystat['Max'], mystat['Cur'])
+            mystat['Cur'] = min(mystat['Max'], mystat['Cur'])
             self.check_stats()
 
     def check_stats(self):
-        if self.db.stats['Health']['Cur'] <= 0:
+        healthcur, healthmax = self.get_stat('Health')
+        if healthcur <= 0:
             if chandler := self.ndb.combat_handler:
                 chandler.msg_all(f'COMBAT: {self.key} is knocked out.')
                 chandler.remove_character(self)
@@ -189,6 +201,29 @@ class CardUserMixin(object):
 
         return string
 
+    def addeffect(self, stat, amount, duration=-1, source=None):
+        if not source:
+            source = self
+        id = random.randint(0, 10000)
+        self.db.card_effects[id] = {'Stat': stat, 'Amount': amount, 'Duration': duration, 'Source': source}
+        self.calculate_stats()
+        self.check_stats()
+
+    def countdowneffects(self):
+        for effectkey in self.db.card_effects.keys():
+            effect = self.db.card_effects[effectkey]
+            if effect['Duration'] > 0:
+                effect['Duration'] -= 1
+                if effect['Duration'] == 0:
+                    del self.db.card_effects[effectkey]
+        self.calculate_stats()
+        self.check_stats()
+
+    def cleareffects(self):
+        self.db.card_effects = {}
+        self.calculate_stats()
+        self.check_stats()
+
 
 class CardCharacter(CardUserMixin, DefaultCharacter):
     """
@@ -201,6 +236,7 @@ class CardCharacter(CardUserMixin, DefaultCharacter):
     def die(self):
         self.location.msg_contents(f'{self.key} is unconscious.')
         # TODO: Add cmdset to remove basic commands like move.
+
 
 class CardObject(DefaultObject):
     """

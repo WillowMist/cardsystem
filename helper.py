@@ -98,7 +98,6 @@ def card_detail(card):
                               )
     return cardfmt
 
-
 def card_small_multiple(cardlist, width=79, title="Your Deck"):
     colcount = int(width/26)
     rows = []
@@ -124,16 +123,19 @@ def combat_stats(combatant, looker=None):
     hand = len(combatant.hand)
     discard = len(combatant.discardpile)
     played = combatant.played
-    healthcur = combatant.db.stats['Health']['Cur']
-    healthmax = combatant.db.stats['Health']['Max']
-    healthpct = healthcur/healthmax
-    color = 'c'
-    if healthpct < .5:
-        color = 'y'
-    elif healthpct < .25:
-        color = 'r'
-    healthstring = f'|{color}{healthcur}|h/{healthmax}|n'
-    table = [f"Health: {healthstring}", f"Deck Size: {deck}", f"Hand Size: {hand}", f"Discard Size: {discard}"]
+    statstrings = []
+    for stat in sorted(list(combatant.db.stats.keys())):
+        statcur, statmax = combatant.get_stat(stat)
+        statpct = statcur/statmax
+        color = 'c'
+        if statpct < .25:
+            color = 'r'
+        elif statpct < .5:
+            color = 'y'
+        elif statpct > 1:
+            color = 'G'
+        statstrings.append(f'{stat}: |{color}{statcur}|n|h/{statmax}|n')
+    table = statstrings + [f"Deck Size: {deck}", f"Hand Size: {hand}", f"Discard Size: {discard}"]
     for card in played:
         cardinfo = get_card_data(card)
         table.append(card_brief(cardinfo))

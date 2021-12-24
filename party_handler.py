@@ -1,6 +1,6 @@
 import random
 from evennia import DefaultScript, CmdSet, create_script, Command
-from cardsystem.typeclasses import CardObject, CardCharacter
+from cardsystem.typeclasses import CardObject, CardCharacter, NPC
 from typeclasses.characters import Character
 
 class PartyHandler(DefaultScript):
@@ -36,7 +36,7 @@ class PartyHandler(DefaultScript):
         This handles the adding of party invites
         """
         character.ndb.party_invite = self
-        if character in CardObject.objects.all():
+        if character in NPC.objects.all():
             character.consider_invite()
         elif character in Character.objects.all() or character in CardCharacter.objects.all():
             character.cmdset.add("cardsystem.party_handler.PartyInviteeCmdSet")

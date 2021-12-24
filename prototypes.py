@@ -26,3 +26,8 @@ FARMER = {
     'card_deck': ['Base_Common_Punch', 'Base_Common_Punch', 'Base_Common_Punch', 'Base_Common_Kick'],
     'card_equipped': ['Base_Common_Pitchfork']
 }
+
+ORC = {
+    'key': "Orc",
+    'prototype_parent': "GOBLIN"
+}
